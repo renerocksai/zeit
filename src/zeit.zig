@@ -30,7 +30,7 @@ pub const utc: TimeZone = .{ .fixed = .{
     .is_dst = false,
 } };
 
-pub fn local(alloc: std.mem.Allocator, maybe_env: ?*const std.process.EnvMap) !TimeZone {
+pub fn local(alloc: std.mem.Allocator, maybe_env: ?*const std.process.Environ.Map) !TimeZone {
     switch (builtin.os.tag) {
         .windows => {
             const win = try timezone.Windows.local(alloc);
@@ -43,9 +43,12 @@ pub fn local(alloc: std.mem.Allocator, maybe_env: ?*const std.process.EnvMap) !T
                 }
             }
 
-            const f = try std.fs.cwd().openFile("/etc/localtime", .{});
-            defer f.close();
-            return .{ .tzinfo = try timezone.TZInfo.parse(alloc, f.reader()) };
+            const io = std.Io.Threaded.global_single_threaded.io();
+            const f = try std.Io.Dir.cwd().openFile(io, "/etc/localtime", .{});
+            defer f.close(io);
+            var buf: [4096]u8 = undefined;
+            var fr = f.reader(io, &buf);
+            return .{ .tzinfo = try timezone.TZInfo.parse(alloc, &fr.interface) };
         },
     }
 }
@@ -58,7 +61,7 @@ pub fn local(alloc: std.mem.Allocator, maybe_env: ?*const std.process.EnvMap) !T
 fn localFromEnv(
     alloc: std.mem.Allocator,
     tz: []const u8,
-    env: *const std.process.EnvMap,
+    env: *const std.process.Environ.Map,
 ) !TimeZone {
     assert(tz.len != 0); // TZ is empty string
 
@@ -67,9 +70,12 @@ fn localFromEnv(
 
     assert(tz.len > 1); // TZ not long enough
     if (tz[1] == '/') {
-        const f = try std.fs.cwd().openFile(tz[1..], .{});
-        defer f.close();
-        return .{ .tzinfo = try timezone.TZInfo.parse(alloc, f.reader()) };
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const f = try std.Io.Dir.cwd().openFile(io, tz[1..], .{});
+        defer f.close(io);
+        var buf: [4096]u8 = undefined;
+        var fr = f.reader(io, &buf);
+        return .{ .tzinfo = try timezone.TZInfo.parse(alloc, &fr.interface) };
     }
 
     if (std.meta.stringToEnum(Location, tz[1..])) |loc|
@@ -81,7 +87,7 @@ fn localFromEnv(
 pub fn loadTimeZone(
     alloc: std.mem.Allocator,
     loc: Location,
-    maybe_env: ?*const std.process.EnvMap,
+    maybe_env: ?*const std.process.Environ.Map,
 ) !TimeZone {
     switch (builtin.os.tag) {
         .windows => {
@@ -91,11 +97,12 @@ pub fn loadTimeZone(
         else => {},
     }
 
-    var dir: std.fs.Dir = blk: {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var dir: std.Io.Dir = blk: {
         // If we have an env and a TZDIR, use that
         if (maybe_env) |env| {
             if (env.get("TZDIR")) |tzdir| {
-                const dir = try std.fs.openDirAbsolute(tzdir, .{});
+                const dir = try std.Io.Dir.openDirAbsolute(io, tzdir, .{});
                 break :blk dir;
             }
         }
@@ -108,15 +115,17 @@ pub fn loadTimeZone(
             "/etc/zoneinfo/",
         };
         for (zone_dirs) |zone_dir| {
-            const dir = std.fs.openDirAbsolute(zone_dir, .{}) catch continue;
+            const dir = std.Io.Dir.openDirAbsolute(io, zone_dir, .{}) catch continue;
             break :blk dir;
         } else return error.FileNotFound;
     };
 
-    defer dir.close();
-    const f = try dir.openFile(loc.asText(), .{});
-    defer f.close();
-    return .{ .tzinfo = try timezone.TZInfo.parse(alloc, f.reader()) };
+    defer dir.close(io);
+    const f = try dir.openFile(io, loc.asText(), .{});
+    defer f.close(io);
+    var buf: [4096]u8 = undefined;
+    var fr = f.reader(io, &buf);
+    return .{ .tzinfo = try timezone.TZInfo.parse(alloc, &fr.interface) };
 }
 
 /// An Instant in time. Instants occur at a precise time and place, thus must
@@ -265,7 +274,7 @@ pub const Instant = struct {
 /// create a new Instant
 pub fn instant(cfg: Instant.Config) !Instant {
     const ts: Nanoseconds = switch (cfg.source) {
-        .now => std.time.nanoTimestamp(),
+        .now => std.Io.Timestamp.now(std.Io.Threaded.global_single_threaded.io(), .real).nanoseconds,
         .unix_timestamp => |unix| @as(i128, unix) * ns_per_s,
         .unix_nano => |nano| nano,
         .time => |time| time.instant().timestamp,
