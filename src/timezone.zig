@@ -719,7 +719,7 @@ pub const Windows = struct {
         const LONG = std.os.windows.LONG;
         const USHORT = std.os.windows.USHORT;
         const WCHAR = std.os.windows.WCHAR;
-        const WINAPI = std.os.windows.WINAPI;
+        const WINAPI: std.builtin.CallingConvention = .winapi;
         const WORD = std.os.windows.WORD;
 
         const epoch = std.time.epoch.windows;
@@ -800,8 +800,14 @@ pub const Windows = struct {
     /// 4. Determine if we are in DST or not
     /// 5. Return result
     pub fn adjust(self: Windows, timestamp: Seconds) AdjustedTime {
-        const instant = zeit.instant(.{ .source = .{ .unix_timestamp = timestamp } }) catch unreachable;
-        const time = instant.time();
+        // A .unix_timestamp instant never consults io, so build it directly
+        // instead of calling the io-taking zeit.instant(); this keeps the
+        // io-free TimeZone.adjust dispatch (and this Windows path) io-free.
+        const inst: zeit.Instant = .{
+            .timestamp = @as(zeit.Nanoseconds, timestamp) * std.time.ns_per_s,
+            .timezone = &zeit.utc,
+        };
+        const time = inst.time();
 
         const systemtime: windows.SYSTEMTIME = .{
             .wYear = @intCast(time.year),
@@ -815,14 +821,14 @@ pub const Windows = struct {
         };
 
         var localtime: windows.SYSTEMTIME = undefined;
-        if (windows.SystemTimeToTzSpecificLocalTimeEx(&self.zoneinfo, &systemtime, &localtime) == 0) {
-            const err = std.os.windows.kernel32.GetLastError();
+        if (!windows.SystemTimeToTzSpecificLocalTimeEx(&self.zoneinfo, &systemtime, &localtime).toBool()) {
+            const err = std.os.windows.GetLastError();
             std.log.err("{}", .{err});
             @panic("TODO");
         }
         var tzi: windows.TIME_ZONE_INFORMATION = undefined;
-        if (windows.GetTimeZoneInformationForYear(localtime.wYear, &self.zoneinfo, &tzi) == 0) {
-            const err = std.os.windows.kernel32.GetLastError();
+        if (!windows.GetTimeZoneInformationForYear(localtime.wYear, &self.zoneinfo, &tzi).toBool()) {
+            const err = std.os.windows.GetLastError();
             std.log.err("{}", .{err});
             @panic("TODO");
         }
