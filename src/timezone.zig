@@ -132,9 +132,9 @@ pub const Posix = struct {
                     const day = try std.fmt.parseInt(u3, str[i..], 10);
                     return .{
                         .mwd = .{
-                            .month = @enumFromInt(month),
+                            .month = @fromBackingInt(@intCast(month)),
                             .week = week,
-                            .day = @enumFromInt(day),
+                            .day = @fromBackingInt(@intCast(day)),
                         },
                     };
                 },
@@ -370,7 +370,7 @@ pub const Posix = struct {
         const end = self.end orelse return false;
         const days_from_epoch = @divFloor(timestamp, s_per_day);
         const civil = zeit.civilFromDays(days_from_epoch);
-        const civil_month = @intFromEnum(civil.month);
+        const civil_month = @backingInt(civil.month);
 
         const start_s: Seconds = switch (start) {
             .julian => |rule| blk: {
@@ -386,7 +386,7 @@ pub const Posix = struct {
                 break :blk @as(i64, days) * s_per_day + rule.time + self.std_offset;
             },
             .mwd => |rule| blk: {
-                const rule_month = @intFromEnum(rule.month);
+                const rule_month = @backingInt(rule.month);
                 if (civil_month < rule_month) return false;
                 // bail early if we are greater than this month. we know we only
                 // rely on the end time. We yield a value that is before the
@@ -425,7 +425,7 @@ pub const Posix = struct {
                 break :blk @as(i64, days) * s_per_day + rule.time + self.std_offset;
             },
             .mwd => |rule| blk: {
-                const rule_month = @intFromEnum(rule.month);
+                const rule_month = @backingInt(rule.month);
                 if (civil_month > rule_month) return false;
                 // bail early if we are less than this month. we know we only
                 // rely on the start time. We yield a value that is after the
@@ -811,7 +811,7 @@ pub const Windows = struct {
 
         const systemtime: windows.SYSTEMTIME = .{
             .wYear = @intCast(time.year),
-            .wMonth = @intFromEnum(time.month),
+            .wMonth = @backingInt(time.month),
             .wDayOfWeek = 0, // not used in calculation
             .wDay = time.day,
             .wHour = time.hour,
@@ -848,7 +848,7 @@ pub const Windows = struct {
     fn systemtimetoZeitTime(sys: windows.SYSTEMTIME) zeit.Time {
         return .{
             .year = sys.wYear,
-            .month = @enumFromInt(sys.wMonth),
+            .month = @fromBackingInt(@intCast(sys.wMonth)),
             .day = @intCast(sys.wDay),
             .hour = @intCast(sys.wHour),
             .minute = @intCast(sys.wMinute),
@@ -878,10 +878,10 @@ pub const Windows = struct {
         if (time.wMonth == start.wMonth) {
             // days is the first "rule day" of the month (ie the first
             // Sunday of the month)
-            var days: u9 = first_of_month.daysUntil(@enumFromInt(start.wDayOfWeek));
+            var days: u9 = first_of_month.daysUntil(@fromBackingInt(@intCast(start.wDayOfWeek)));
             var i: usize = 1;
             while (i < start.wDay) : (i += 1) {
-                const month: zeit.Month = @enumFromInt(start.wDay);
+                const month: zeit.Month = @fromBackingInt(@intCast(start.wDay));
                 if (days + 7 >= month.lastDay(time.wYear)) break;
                 days += 7;
             }
@@ -897,10 +897,10 @@ pub const Windows = struct {
         if (time.wMonth == end.wMonth) {
             // days is the first "rule day" of the month (ie the first
             // Sunday of the month)
-            var days: u9 = first_of_month.daysUntil(@enumFromInt(end.wDayOfWeek));
+            var days: u9 = first_of_month.daysUntil(@fromBackingInt(@intCast(end.wDayOfWeek)));
             var i: usize = 1;
             while (i < end.wDay) : (i += 1) {
-                const month: zeit.Month = @enumFromInt(end.wDay);
+                const month: zeit.Month = @fromBackingInt(@intCast(end.wDay));
                 if (days + 7 >= month.lastDay(time.wYear)) break;
                 days += 7;
             }

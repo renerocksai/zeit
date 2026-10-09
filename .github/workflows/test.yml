@@ -1,27 +1,47 @@
 name: test
 
 on:
+  push:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: zeit-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Native ${{ matrix.os }} / ${{ matrix.optimize }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        optimize: [debug, safe]
     runs-on: ${{matrix.os}}
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v3
-      - uses: mlugg/setup-zig@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install exact checksum-verified Zig
+        run: python .github/install-zig.py
+      - name: Verify tests, formatting and API docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          packet="$RUNNER_TEMP/zeit-ci"
+          mkdir -p "$packet"
+          { git rev-parse HEAD; zig version; python --version; } > "$packet/environment.log"
+          python -c 'import platform; print(platform.platform()); print(platform.machine())' >> "$packet/environment.log"
+          zig build verify -Doptimize=${{ matrix.optimize }} -j2 --summary all 2>&1 | tee "$packet/verify.log"
+          test -s zig-out/docs/index.html
+      - name: Upload verification logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          version: 0.14.0
-      - run: zig build test
-  check-fmt:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.13.0
-      - run: zig fmt --check .
+          name: zeit-${{ matrix.os }}-${{ matrix.optimize }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/zeit-ci
+          if-no-files-found: warn
+          retention-days: 14

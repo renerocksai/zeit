@@ -330,7 +330,7 @@ pub const Month = enum(u4) {
     /// returns the last day of the month
     /// Neri/Schneider algorithm
     pub fn lastDay(self: Month, year: i32) u5 {
-        const m: u5 = @intFromEnum(self);
+        const m: u5 = @backingInt(self);
         if (m == 2) return if (isLeapYear(year)) 29 else 28;
         return 30 | (m ^ (m >> 3));
     }
@@ -377,10 +377,10 @@ pub const Month = enum(u4) {
 
     /// the number of days in a year before this month
     pub fn daysBefore(self: Month, year: i32) u9 {
-        var m = @intFromEnum(self) - 1;
+        var m = @backingInt(self) - 1;
         var result: u9 = 0;
         while (m > 0) : (m -= 1) {
-            const month: Month = @enumFromInt(m);
+            const month: Month = @fromBackingInt(@intCast(m));
             result += month.lastDay(year);
         }
         return result;
@@ -450,7 +450,7 @@ pub const Weekday = enum(u3) {
 
     /// number of days from self until other. Returns 0 when self == other
     pub fn daysUntil(self: Weekday, other: Weekday) u3 {
-        const d: u8 = @as(u8, @intFromEnum(other)) -% @as(u8, @intFromEnum(self));
+        const d: u8 = @as(u8, @backingInt(other)) -% @as(u8, @backingInt(self));
         return if (d <= 6) @intCast(d) else @intCast(d +% 7);
     }
 
@@ -514,9 +514,9 @@ pub const Date = struct {
             return .after;
         }
 
-        if (@intFromEnum(date1.month) > @intFromEnum(date2.month)) {
+        if (@backingInt(date1.month) > @backingInt(date2.month)) {
             return .before;
-        } else if (@intFromEnum(date1.month) < @intFromEnum(date2.month)) {
+        } else if (@backingInt(date1.month) < @backingInt(date2.month)) {
             return .after;
         }
 
@@ -626,7 +626,7 @@ pub const Time = struct {
                     switch (token_end - i) {
                         2 => {
                             const m: u4 = try parseInt(u4, iso[i..token_end], 10);
-                            time.month = @enumFromInt(m);
+                            time.month = @fromBackingInt(@intCast(m));
                             state = .day;
                         },
                         3 => { // ordinal
@@ -634,7 +634,7 @@ pub const Time = struct {
                             var m: u4 = 1;
                             var days: u9 = 0;
                             while (m <= 12) : (m += 1) {
-                                const month: Month = @enumFromInt(m);
+                                const month: Month = @fromBackingInt(@intCast(m));
 
                                 if (days + month.lastDay(time.year) < doy) {
                                     days += month.lastDay(time.year);
@@ -648,7 +648,7 @@ pub const Time = struct {
                         },
                         4 => { // MMDD
                             const m: u4 = try parseInt(u4, iso[i .. i + 2], 10);
-                            time.month = @enumFromInt(m);
+                            time.month = @fromBackingInt(@intCast(m));
                             time.day = try parseInt(u5, iso[i + 2 .. token_end], 10);
                             state = .hour;
                         },
@@ -1037,7 +1037,7 @@ pub const Time = struct {
                         "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}Z",
                         .{
                             @as(u32, @intCast(self.year)),
-                            @intFromEnum(self.month),
+                            @backingInt(self.month),
                             self.day,
                             self.hour,
                             self.minute,
@@ -1054,7 +1054,7 @@ pub const Time = struct {
                         "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}{c}{d:0>2}:{d:0>2}",
                         .{
                             @as(u32, @intCast(self.year)),
-                            @intFromEnum(self.month),
+                            @backingInt(self.month),
                             self.day,
                             self.hour,
                             self.minute,
@@ -1139,7 +1139,7 @@ pub const Time = struct {
                         else => try writer.print("{d}", .{self.hour - 12}),
                     }
                 },
-                'm' => try writer.print("{d:0>2}", .{@intFromEnum(self.month)}),
+                'm' => try writer.print("{d:0>2}", .{@backingInt(self.month)}),
                 'M' => try writer.print("{d:0>2}", .{self.minute}),
                 'n' => try writer.writeByte('\n'),
                 'O' => return error.UnsupportedSpecifier,
@@ -1168,7 +1168,7 @@ pub const Time = struct {
                     const weekday = weekdayFromDays(days);
                     switch (weekday) {
                         .sun => try writer.writeByte('7'),
-                        else => try writer.writeByte(@as(u8, @intFromEnum(weekday)) + 0x30),
+                        else => try writer.writeByte(@as(u8, @backingInt(weekday)) + 0x30),
                     }
                 },
                 'U' => {
@@ -1182,7 +1182,7 @@ pub const Time = struct {
                     // Day of year of first sunday. This represents the start of week 1
                     const first_sunday = switch (weekd_jan_1) {
                         .sun => 1,
-                        else => 7 - @intFromEnum(weekd_jan_1) + 1,
+                        else => 7 - @backingInt(weekd_jan_1) + 1,
                     };
                     if (day_of_year < first_sunday)
                         try writer.writeAll("00")
@@ -1195,7 +1195,7 @@ pub const Time = struct {
                         .{ .year = self.year, .month = self.month, .day = self.day },
                     );
                     const weekday = weekdayFromDays(days);
-                    try writer.writeByte(@as(u8, @intFromEnum(weekday)) + 0x30);
+                    try writer.writeByte(@as(u8, @backingInt(weekday)) + 0x30);
                 },
                 'W' => {
                     const day_of_year = self.day + self.month.daysBefore(self.year);
@@ -1209,7 +1209,7 @@ pub const Time = struct {
                     const first_monday = switch (weekd_jan_1) {
                         .sun => 2,
                         .mon => 1,
-                        else => 7 - @intFromEnum(weekd_jan_1) + 2,
+                        else => 7 - @backingInt(weekd_jan_1) + 2,
                     };
                     if (day_of_year < first_monday)
                         try writer.writeAll("00")
@@ -1291,7 +1291,7 @@ pub const Time = struct {
                     i += 1;
                     const b2 = fmt[i];
                     switch (b2) {
-                        '1' => try writer.print("{d:0>2}", .{@intFromEnum(self.month)}),
+                        '1' => try writer.print("{d:0>2}", .{@backingInt(self.month)}),
                         '2' => try writer.print("{d:0>2}", .{self.day}),
                         '3' => {
                             if (self.hour == 0)
@@ -1325,7 +1325,7 @@ pub const Time = struct {
                         i += 1;
                         try writer.print("{d:0>2}", .{self.hour});
                     } else {
-                        try writer.print("{d}", .{@intFromEnum(self.month)});
+                        try writer.print("{d}", .{@backingInt(self.month)});
                     }
                 },
                 '2' => { // 2006, 2
@@ -1596,9 +1596,9 @@ pub fn isLeapYear(year: i32) bool {
 /// https://howardhinnant.github.io/date_algorithms.html#weekday_from_days
 pub fn weekdayFromDays(days: Days) Weekday {
     if (days >= -4)
-        return @enumFromInt(@mod((days + 4), 7))
+        return @fromBackingInt(@intCast(@mod((days + 4), 7)))
     else
-        return @enumFromInt(@mod((days + 5), 7) + 6);
+        return @fromBackingInt(@intCast(@mod((days + 5), 7) + 6));
 }
 
 test "weekdayFromDays" {
@@ -1635,13 +1635,13 @@ pub fn civilFromDays(days: Days) Date {
     const m = if (mp < 10) mp + 3 else mp - 9; // [1, 12]
     return .{
         .year = if (m <= 2) y + 1 else y,
-        .month = @enumFromInt(m),
+        .month = @fromBackingInt(@intCast(m)),
         .day = @truncate(d),
     };
 }
 /// return the number of days since the epoch from the civil date
 pub fn daysFromCivil(date: Date) Days {
-    const m = @intFromEnum(date.month);
+    const m = @backingInt(date.month);
     const y = if (m <= 2) date.year - 1 else date.year;
     const era = if (y >= 0) @divFloor(y, 400) else @divFloor(y - 399, 400);
     const yoe: u32 = @intCast(y - era * 400);
