@@ -2,6 +2,12 @@
 
 A time library written in zig.
 
+This fork targets exact Zig **0.17.0**, recorded in `.zig-version`.
+CI verifies the checked-in release archive checksum and runs `zig build verify`
+in Debug and Safe on native Linux, macOS and Windows runners. The `verify`
+step checks formatting, runs the existing unit tests and generates API docs.
+Use `zig build docs` to generate documentation under `zig-out/docs` locally.
+
 ## Usage
 
 [API Documentation](https://rockorager.github.io/zeit/)
